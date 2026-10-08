@@ -1,541 +1,603 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Sidebar } from '../../components/layout/Sidebar';
-import { Navbar } from '../../components/layout/Navbar';
-import { ExecutiveSummaryView } from '../../components/dashboard/ExecutiveSummaryView';
-import { SalesAgentView } from '../../components/dashboard/SalesAgentView';
-import { InventoryAgentView } from '../../components/dashboard/InventoryAgentView';
-import { FinanceAgentView } from '../../components/dashboard/FinanceAgentView';
-import { CustomerAgentView } from '../../components/dashboard/CustomerAgentView';
-import { MarketAgentView } from '../../components/dashboard/MarketAgentView';
-import { MultiAgentChatConsole } from '../../components/dashboard/MultiAgentChatConsole';
-import { DataIntegrationHub } from '../../components/dashboard/DataIntegrationHub';
-import { ActionConfirmationModal } from '../../components/dashboard/ActionConfirmationModal';
-import { AgentInspectorDrawer } from '../../components/dashboard/AgentInspectorDrawer';
-
+import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { 
-  INITIAL_AGENTS, 
-  INITIAL_DATA_SOURCES, 
-  INITIAL_SKUS, 
+  Bot, 
+  Sparkles, 
+  Send, 
+  Mic, 
+  MicOff, 
+  Volume2, 
+  VolumeX, 
+  RotateCcw, 
+  Trash2, 
+  Copy, 
+  Check, 
+  ChevronDown, 
+  ChevronRight, 
+  ArrowLeft,
+  User,
+  Lightbulb,
+  TrendingUp,
+  Package,
+  ReceiptText,
+  Play,
+  ArrowRight,
+  Zap
+} from 'lucide-react';
+import { MarkdownPreview } from '../../components/ui/MarkdownPreview';
+import { 
+  VYAPAR_SKUS, 
   MONTHLY_SALES_HISTORY, 
   EXPENSE_LEDGER, 
   CUSTOMER_FEEDBACK_FEED, 
-  MARKET_SIGNALS, 
-  INITIAL_STRATEGIC_RECOMMENDATIONS,
-  VYAPAR_AGENTS,
-  VYAPAR_SKUS,
-  VYAPAR_STORE_DATA,
-  VYAPAR_PITCH_STEPS
+  MARKET_SIGNALS 
 } from '../../lib/mockData';
-import { 
-  calculateBusinessHealthScore, 
-  generateAgentInsights, 
-  processNaturalLanguageQuery,
-  queryLiveGeminiAgent 
-} from '../../lib/agentEngine';
-import { 
-  SKUItem, 
-  SalesRecord, 
-  ExpenseRecord, 
-  CustomerFeedback, 
-  MarketSignal, 
-  ChatMessage, 
-  StrategicRecommendation,
-  AgentMetadata,
-  LanguageMode,
-  SupplierComparisonQuote
-} from '../../lib/types';
-import { VyaparPitchDemoBanner } from '../../components/dashboard/VyaparPitchDemoBanner';
-import { VyaparSupplierModal } from '../../components/dashboard/VyaparSupplierModal';
-import { VyaparCustomerRecoveryModal } from '../../components/dashboard/VyaparCustomerRecoveryModal';
-import { CheckCircle2 } from 'lucide-react';
+import { queryLiveGeminiAgent, processNaturalLanguageQuery } from '../../lib/agentEngine';
+import { ChatMessage } from '../../lib/types';
+
+// The 5 core demonstration steps from Harsh Chavan's pitch script
+const PITCH_DEMO_STEPS = [
+  {
+    stepNumber: 1,
+    time: "1:20",
+    name: "Morning Status",
+    prompt: "Good morning. Aaj shop ka status batao.",
+    desc: "Sales ₹48,750, Profit ₹11,430, Udhar ₹72,500, and 3 proactive alerts."
+  },
+  {
+    stepNumber: 2,
+    time: "1:50",
+    name: "Smart Reorder",
+    prompt: "Haan, low-stock item order kar do.",
+    desc: "3-Supplier quote compare (Mahesh ₹12,450, saves ₹670) & 1-click PO."
+  },
+  {
+    stepNumber: 3,
+    time: "2:20",
+    name: "Cash Recovery",
+    prompt: "Kaunse customers ne payment nahi kiya?",
+    desc: "Sharma Construction ₹32k (92% recovery prob), Sai ₹21.5k, Om ₹19k."
+  },
+  {
+    stepNumber: 4,
+    time: "2:50",
+    name: "Profit Strategy",
+    prompt: "Business improve kaise kar sakte hai?",
+    desc: "LED 32% margin on 12% space vs Pumps 8% on 30% space (+₹18k–₹24k profit)."
+  },
+  {
+    stepNumber: 5,
+    time: "3:15",
+    name: "Predictive Alert",
+    prompt: "Copper wire stock status batao.",
+    desc: "Sales surge +38%, out in 4 days, 150 rolls reorder to save ₹45k+ revenue."
+  }
+];
 
 export default function DashboardPage() {
-  const [storeMode, setStoreMode] = useState<'vyapar' | 'apex'>('vyapar');
-  const [activeTab, setActiveTab] = useState('executive');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isLiveSimulating, setIsLiveSimulating] = useState(true);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [inputQuery, setInputQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [expandedReasoningMap, setExpandedReasoningMap] = useState<Record<string, boolean>>({});
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
-  // Pitch Stepper & Voice States
-  const [pitchStepIndex, setPitchStepIndex] = useState(0);
-  const [language, setLanguage] = useState<LanguageMode>('hinglish');
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
-  const [activeLoopPhase, setActiveLoopPhase] = useState<'DETECT' | 'DECIDE' | 'ACT' | 'LEARN'>('DETECT');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Modals & Drawers State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isVyaparSupplierModalOpen, setIsVyaparSupplierModalOpen] = useState(false);
-  const [isVyaparRecoveryModalOpen, setIsVyaparRecoveryModalOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState('');
-  const [modalActionType, setModalActionType] = useState('');
-  const [modalPayload, setModalPayload] = useState<Record<string, any>>({});
-
-  const [inspectingAgent, setInspectingAgent] = useState<AgentMetadata | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
-  // Dynamic Datasets
-  const [skus, setSkus] = useState<SKUItem[]>(VYAPAR_SKUS);
-  const [salesHistory, setSalesHistory] = useState<SalesRecord[]>(MONTHLY_SALES_HISTORY);
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>(EXPENSE_LEDGER);
-  const [feedbacks, setFeedbacks] = useState<CustomerFeedback[]>(CUSTOMER_FEEDBACK_FEED);
-  const [signals, setSignals] = useState<MarketSignal[]>(MARKET_SIGNALS);
-  const [dataSources, setDataSources] = useState(INITIAL_DATA_SOURCES);
-  const [recommendations, setRecommendations] = useState<StrategicRecommendation[]>(INITIAL_STRATEGIC_RECOMMENDATIONS);
-
-  // Active Agents based on store mode
-  const currentAgents = storeMode === 'vyapar' ? VYAPAR_AGENTS : INITIAL_AGENTS;
-
-  // Initial Welcome Chat Message for Vyapar AI
+  // Initial welcome message grounded in Rajesh's shop
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: 'vyapar-welcome-1',
+      id: 'welcome-msg',
       sender: 'coo',
-      finalAnswer: `### 🌅 Good morning Rajesh ji!
+      finalAnswer: `### 🌅 Good morning Rajesh Bhai!
+Welcome to **Vyapar AI** — your 24/7 autonomous AI business partner for **Rajesh Hardware & Electricals (Thane West)**.
 
-Welcome to **Vyapar AI** — your 24/7 Autonomous AI Business Partner for **Rajesh Hardware & Electricals (Thane West)**.
-
-| Yesterday's Sales | Estimated Net Profit | Outstanding Udhar | Today's Expected Forecast |
-| :--- | :--- | :--- | :--- |
-| **₹48,750** | **₹11,430** (23.4%) | **₹72,500** (3 Customer Accounts) | **₹52,000 – ₹58,000** |
+| Metric | Status | Key Highlight |
+| :--- | :--- | :--- |
+| **Yesterday's Counter Sales** | **₹48,750** | 38 bills (Cash + BharatPe UPI QR) |
+| **Estimated Net Profit** | **₹11,430** | **23.4%** net profit margin |
+| **Pending Receivables (Khata)** | **₹72,500** | 3 construction trade accounts |
+| **Today's Expected Forecast** | **₹52,000 – ₹58,000** | Based on recent Thane project velocity |
 
 ---
 
 ### ⚡ 3 Proactive Alerts You Should Know:
-1. **📦 Low Stock Alert**: Your **1-inch PVC conduit pipe** will run out in **3 days** (4 bundles left).
-2. **💸 Overdue Payments**: **Two customers** have overdue payments (**Sharma Construction ₹32,000** & **Sai Electric ₹21,500**).
-3. **📈 Revenue Forecast**: Based on recent Thane construction demand, today's counter revenue is expected between **₹52,000 to ₹58,000**.
+1. **📦 Low Stock**: Your **1-inch PVC pipe** will run out in **3 days** (4 bundles left).
+2. **💸 Overdue Payments**: Two customers have overdue balances (**Sharma Construction ₹32,000** & **Sai Electric ₹21,500**).
+3. **📈 Demand Surge**: Copper wire sales accelerated **+38%** in the last 10 days.
 
-*Ask anything below (or speak in Hinglish/Marathi/English), or click through the 5-step Pitch Demo bar above!*`,
+*Select any suggested action below or ask any question to get started.*`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       suggestedActions: [
-        { label: 'Haan, low-stock item order kar do', actionType: 'vyapar_supplier_modal', payload: { item: '1-inch PVC Pipe' } },
-        { label: 'Kaunse customers ne payment nahi kiya?', actionType: 'query', payload: { query: 'Kaunse customers ne payment nahi kiya?' } },
-        { label: 'Business improve kaise kar sakte hai?', actionType: 'query', payload: { query: 'Business improve kaise kar sakte hai?' } }
+        { label: '👉 Step 1: "Good morning. Aaj shop ka status batao."', actionType: 'query', payload: { query: 'Good morning. Aaj shop ka status batao.' } },
+        { label: '👉 Step 2: "Haan, low-stock item order kar do."', actionType: 'query', payload: { query: 'Haan, low-stock item order kar do.' } },
+        { label: '👉 Step 3: "Kaunse customers ne payment nahi kiya?"', actionType: 'query', payload: { query: 'Kaunse customers ne payment nahi kiya?' } }
       ]
     }
   ]);
-  const [isAgentThinking, setIsAgentThinking] = useState(false);
 
-  // Health score calculation
-  const healthScore = calculateBusinessHealthScore(skus, salesHistory, expenses, feedbacks);
-  const activeInsights = generateAgentInsights(skus, salesHistory, expenses, feedbacks, signals);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSignOut = () => {
-    localStorage.removeItem('token');
-    document.cookie = 'token=; path=/; max-age=0';
-    window.location.href = '/login';
-  };
-
-  // Periodic subtle live simulation ping
   useEffect(() => {
-    if (!isLiveSimulating) return;
-    const interval = setInterval(() => {
-      setSkus(prev => prev.map(s => {
-        if (s.id === 'SKU-884' && s.currentStock > 10) {
-          const nextStock = s.currentStock - 1;
-          return { ...s, currentStock: nextStock, daysUntilStockout: Math.max(1, Math.round(nextStock / s.dailyDepletionRate)) };
-        }
-        return s;
-      }));
-    }, 25000);
-    return () => clearInterval(interval);
-  }, [isLiveSimulating]);
+    scrollToBottom();
+  }, [messages, isLoading]);
 
-  const handleInspectAgent = (agentId: string) => {
-    const found = INITIAL_AGENTS.find(a => a.id === agentId);
-    if (found) {
-      setInspectingAgent(found);
-      setIsDrawerOpen(true);
-    }
-  };
+  const handleSendMessage = async (textToSend?: string) => {
+    const query = (textToSend || inputQuery).trim();
+    if (!query || isLoading) return;
 
-  const handlePitchStepSelect = (stepIdx: number, promptText: string) => {
-    setPitchStepIndex(stepIdx);
-    if (stepIdx === 0) setActiveLoopPhase('DETECT');
-    else if (stepIdx === 1) setActiveLoopPhase('DECIDE');
-    else if (stepIdx === 2) setActiveLoopPhase('ACT');
-    else if (stepIdx === 3) setActiveLoopPhase('DECIDE');
-    else if (stepIdx === 4) setActiveLoopPhase('DETECT');
-
-    handleSendMessage(promptText);
-  };
-
-  const handleSpeechVoiceReadout = (text?: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis || !text) return;
-    window.speechSynthesis.cancel();
-    const cleanText = text.replace(/[*#`_\[\]()|]/g, ' ').replace(/\s+/g, ' ').slice(0, 350);
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const handleSupplierOrderConfirm = (supplier: SupplierComparisonQuote) => {
-    setSkus(prev => prev.map(s => s.id === 'SKU-PVC-1IN' ? { ...s, currentStock: s.currentStock + 50, daysUntilStockout: 41, status: 'optimal' } : s));
-    showToast(`Purchase Order PO-2026-PVC101 created with ${supplier.name} for ₹${supplier.quotedPrice.toLocaleString('en-IN')}. Delivery ${supplier.deliveryTime}.`);
-    setActiveLoopPhase('LEARN');
-
-    const poConfirmationMsg: ChatMessage = {
-      id: `po-${Date.now()}`,
-      sender: 'coo',
-      fileName: 'purchase-order-po-2026-pvc101.md',
-      finalAnswer: `### ✅ Purchase Order PO-2026-PVC101 Created!
-
-- **Vendor**: ${supplier.name} (${supplier.location})
-- **Item**: 1-inch Heavy PVC Conduit Pipe (50 bundles)
-- **Agreed Net Price**: ₹${supplier.quotedPrice.toLocaleString('en-IN')} (Saved ₹${supplier.potentialSaving || 670})
-- **Expected Delivery**: ${supplier.deliveryTime}
-
-Delivery status will be tracked automatically upon shop arrival tomorrow morning.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      keyDataPoints: [
-        { label: 'Vendor', value: supplier.name },
-        { label: 'PO Total', value: `₹${supplier.quotedPrice.toLocaleString('en-IN')}` },
-        { label: 'Delivery', value: supplier.deliveryTime }
-      ]
-    };
-    setMessages(prev => [...prev, poConfirmationMsg]);
-  };
-
-  const handleRecoveryRemindersSent = (sentCount: number, recoveredAmount: number) => {
-    showToast(`WhatsApp payment reminders sent to ${sentCount} trade debtors! Expected recovery ₹${recoveredAmount.toLocaleString('en-IN')}.`);
-    setActiveLoopPhase('LEARN');
-
-    const waConfirmationMsg: ChatMessage = {
-      id: `wa-${Date.now()}`,
-      sender: 'coo',
-      fileName: 'whatsapp-recovery-dispatched.md',
-      finalAnswer: `### 📱 WhatsApp Payment Reminders Dispatched!
-
-- **Recipients**: Sharma Construction (₹32,000), Sai Electric Works (₹21,500), Om Enterprises (₹19,000)
-- **Total Recovery Target**: ₹${recoveredAmount.toLocaleString('en-IN')}
-- **UPI Deep-Link**: Integrated BharatPe dynamic settlement URL
-- **Behavioral Learning**: Sharma Construction historically clears payment within 24 hours of WhatsApp notification.
-
-Incoming bank/UPI settlements will be reconciled against the khata ledger automatically.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      keyDataPoints: [
-        { label: 'Reminders Sent', value: `${sentCount} Accounts` },
-        { label: 'Total Inflow Target', value: `₹${recoveredAmount.toLocaleString('en-IN')}` },
-        { label: 'Expected Today', value: '₹32,000 (Sharma)' }
-      ]
-    };
-    setMessages(prev => [...prev, waConfirmationMsg]);
-  };
-
-  const handleActionClick = (actionType: string, payload: any) => {
-    if (actionType === 'navigate') {
-      if (payload.tab) setActiveTab(payload.tab);
-      return;
-    }
-    if (actionType === 'query') {
-      if (payload.query) {
-        handleSendMessage(payload.query);
-        setActiveTab('chat');
-      }
-      return;
-    }
-    if (actionType === 'vyapar_supplier_modal') {
-      setIsVyaparSupplierModalOpen(true);
-      return;
-    }
-    if (actionType === 'vyapar_reminders' || actionType === 'vyapar_send_reminders') {
-      setIsVyaparRecoveryModalOpen(true);
-      return;
-    }
-    if (actionType === 'vyapar_create_po') {
-      const supplier = payload.supplier || 'Mahesh Traders';
-      const amount = payload.amount || 12450;
-      setSkus(prev => prev.map(s => s.id === 'SKU-PVC-1IN' ? { ...s, currentStock: s.currentStock + 50, daysUntilStockout: 41, status: 'optimal' } : s));
-      showToast(`Purchase Order PO-2026-PVC101 created for ${supplier} (₹${amount.toLocaleString('en-IN')}). Delivery tomorrow morning!`);
-      setActiveLoopPhase('ACT');
-      return;
-    }
-    if (actionType === 'vyapar_reallocate_shelf') {
-      showToast('Floor space reallocated: LED frontage +18%, Pumps to catalog. Projected profit +₹24,000/mo!');
-      setActiveLoopPhase('ACT');
-      return;
-    }
-    if (actionType === 'vyapar_reorder_copper') {
-      setSkus(prev => prev.map(s => s.id === 'SKU-COPPER-25' ? { ...s, currentStock: s.currentStock + 150, daysUntilStockout: 54, status: 'optimal' } : s));
-      showToast('Purchase Order for 150 rolls of Finolex copper wire issued. Protected ₹45,000+ in sales!');
-      setActiveLoopPhase('ACT');
-      return;
+    setInputQuery('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
     }
 
-    const titleMap: Record<string, string> = {
-      reorder: `Issue Emergency Purchase Order for ${payload.skuId || 'SKU-884'}`,
-      discount: `Activate 50% Flash Clearance Bundle on ${payload.skuId || 'SKU-405'}`,
-      cut_expense: `Renegotiate Carrier SLA & Cap Express Freight Budget`,
-      contact_customer: `Dispatch Priority Apology & Voucher to Wholesale Accounts`,
-      adjust_price: `Launch Value Bundle to Neutralize Competitor Price Cut`
+    // Automatically update step index if this matches one of our demo steps
+    const matchedStepIdx = PITCH_DEMO_STEPS.findIndex(s => 
+      query.toLowerCase().includes(s.prompt.toLowerCase().slice(0, 15)) ||
+      s.prompt.toLowerCase().includes(query.toLowerCase().slice(0, 15))
+    );
+    if (matchedStepIdx !== -1) {
+      setCurrentStepIndex(matchedStepIdx);
+    }
+
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      sender: 'user',
+      finalAnswer: query,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setModalTitle(titleMap[actionType] || `Execute Strategic Action: ${actionType}`);
-    setModalActionType(actionType);
-    setModalPayload(payload || {});
-    setIsModalOpen(true);
-  };
-
-  const handleConfirmExecuteAction = () => {
-    const actionType = modalActionType;
-    const payload = modalPayload;
-
-    if (actionType === 'reorder') {
-      const skuId = payload.skuId || 'SKU-884';
-      const qty = payload.qty || 250;
-      setSkus(prev => prev.map(s => s.id === skuId ? { ...s, currentStock: s.currentStock + qty, daysUntilStockout: Math.round((s.currentStock + qty) / s.dailyDepletionRate), status: 'optimal' } : s));
-      setRecommendations(prev => prev.filter(r => r.id !== 'rec-001'));
-      showToast(`Purchase Order issued! +${qty} units restocked for ${skuId}.`);
-    } 
-    else if (actionType === 'discount') {
-      const skuId = payload.skuId || 'SKU-405';
-      setSkus(prev => prev.map(s => s.id === skuId ? { ...s, workingCapitalLocked: Math.round(s.workingCapitalLocked * 0.3), status: 'optimal' } : s));
-      setRecommendations(prev => prev.filter(r => r.id !== 'rec-002'));
-      showToast(`Flash discount activated! Stagnant stock liquidated.`);
-    }
-    else if (actionType === 'cut_expense') {
-      setExpenses(prev => prev.map(e => e.id === 'exp-101' ? { ...e, amount: 360000, status: 'normal' } : e));
-      setRecommendations(prev => prev.filter(r => r.id !== 'rec-003'));
-      showToast(`Carrier SLA updated. Bhiwandi freight capped at ₹3,60,000.`);
-    }
-    else if (actionType === 'contact_customer') {
-      setFeedbacks(prev => prev.map(f => ({ ...f, resolutionStatus: 'resolved' })));
-      showToast(`Apology vouchers dispatched to wholesale clients via WhatsApp API.`);
-    }
-    else if (actionType === 'adjust_price') {
-      setSignals(prev => prev.map(s => s.category === 'competitor_pricing' ? { ...s, impactScore: 0 } : s));
-      showToast(`Dynamic pricing bundle activated. Competitor undercutting neutralized.`);
-    }
-    else {
-      showToast(`Strategic decision "${actionType}" authorized & executed.`);
-    }
-  };
-
-  const handleSendMessage = async (queryText: string, targetAgentId?: string | null) => {
-    if (activeTab !== 'chat') setActiveTab('chat');
-    setIsAgentThinking(true);
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
 
     try {
       const response = await queryLiveGeminiAgent(
-        queryText,
-        skus,
-        salesHistory,
-        expenses,
-        feedbacks,
-        signals,
-        targetAgentId
+        query,
+        VYAPAR_SKUS,
+        MONTHLY_SALES_HISTORY,
+        EXPENSE_LEDGER,
+        CUSTOMER_FEEDBACK_FEED,
+        MARKET_SIGNALS
       );
-      setMessages(prev => [...prev, response]);
 
-      if (isVoiceEnabled && response.finalAnswer) {
-        handleSpeechVoiceReadout(response.finalAnswer);
-      }
-    } catch (err) {
-      console.error('Gemini query error:', err);
-      showToast('Live Gemini API error. Please verify network connection.');
+      setMessages(prev => [...prev, response]);
+    } catch {
+      const fallback = processNaturalLanguageQuery(
+        query,
+        VYAPAR_SKUS,
+        MONTHLY_SALES_HISTORY,
+        EXPENSE_LEDGER,
+        CUSTOMER_FEEDBACK_FEED,
+        MARKET_SIGNALS
+      );
+      setMessages(prev => [...prev, fallback]);
     } finally {
-      setIsAgentThinking(false);
+      setIsLoading(false);
     }
   };
 
-  const handleTriggerSimulatedEvent = (eventType: string) => {
-    if (eventType === 'sales_spike') {
-      setSkus(prev => prev.map(s => s.id === 'SKU-884' ? { ...s, currentStock: Math.max(2, s.currentStock - 30), daysUntilStockout: 1, status: 'critical' } : s));
-      showToast(`POS Event: +50 orders processed for SKU-884! Stock depleted.`);
-    } 
-    else if (eventType === 'whatsapp_complaint') {
-      const newFb: CustomerFeedback = { id: `fb-${Date.now()}`, channel: 'whatsapp', customerName: 'Juhu Heritage Lounge', date: 'Just now', message: 'Where is our delivery consignment?', sentiment: 'negative', category: 'shipping', resolutionStatus: 'open' };
-      setFeedbacks(prev => [newFb, ...prev]);
-      showToast(`Event: Urgent WhatsApp complaint received from Juhu client.`);
-    } 
-    else if (eventType === 'logistics_hike') {
-      setExpenses(prev => prev.map(e => e.id === 'exp-101' ? { ...e, amount: e.amount + 180000, status: 'over_budget' } : e));
-      showToast(`Event: Express freight surcharge +₹1,80,000 logged.`);
+  const handleRunDemoStep = (stepIdx: number) => {
+    if (stepIdx < 0 || stepIdx >= PITCH_DEMO_STEPS.length) return;
+    const step = PITCH_DEMO_STEPS[stepIdx];
+    setCurrentStepIndex(stepIdx);
+    handleSendMessage(step.prompt);
+  };
+
+  const handleNextDemoStep = () => {
+    const nextIdx = (currentStepIndex + 1) % PITCH_DEMO_STEPS.length;
+    handleRunDemoStep(nextIdx);
+  };
+
+  const handleClearChat = () => {
+    setMessages([]);
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
-    else if (eventType === 'competitor_promo') {
-      const newSig: MarketSignal = { id: `sig-${Date.now()}`, source: 'Crawler Alert', topic: 'Competitor Promo', title: 'Blue Tokai slashed coffee price by 25%', impactScore: -4, date: 'Today', category: 'competitor_pricing', summary: 'Under-cutting SKU-884 at ₹2,150/kg across Mumbai.' };
-      setSignals(prev => [newSig, ...prev]);
-      showToast(`Event: Market crawler detected 25% competitor price cut.`);
+    setSpeakingMsgId(null);
+  };
+
+  const handleResetChat = () => {
+    setCurrentStepIndex(0);
+    setMessages([
+      {
+        id: `welcome-${Date.now()}`,
+        sender: 'coo',
+        finalAnswer: `### 🌅 Good morning Rajesh Bhai!
+Ready to assist you with **Rajesh Hardware & Electricals (Thane West)**. Ask any question or click a suggested action below.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedActions: [
+          { label: '👉 Step 1: Aaj shop ka status batao', actionType: 'query', payload: { query: 'Good morning. Aaj shop ka status batao.' } },
+          { label: '👉 Step 2: Low-stock item order kar do', actionType: 'query', payload: { query: 'Haan, low-stock item order kar do.' } }
+        ]
+      }
+    ]);
+  };
+
+  const handleCopyText = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMsgId(id);
+    setTimeout(() => setCopiedMsgId(null), 2000);
+  };
+
+  const handleToggleSpeak = (id: string, text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    if (speakingMsgId === id) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const cleanText = text.replace(/[*#`_\[\]()|]/g, ' ').replace(/\s+/g, ' ').slice(0, 450);
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+
+    setSpeakingMsgId(id);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const startListening = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Please type or click the prompt.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'hi-IN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setInputQuery(transcript);
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+          }
+        }
+      };
+      recognition.start();
+    } catch {
+      setIsListening(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-[#faf9f6] text-stone-900 font-sans selection:bg-amber-500/20 selection:text-amber-900">
-      {/* Toast Notification Banner */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 glass-card px-4 py-3 rounded-xl border border-amber-600 bg-white shadow-2xl text-xs font-bold text-amber-950 flex items-center gap-2 animate-bounce">
-          <CheckCircle2 className="h-4 w-4 text-amber-700" />
-          <span>{toastMessage}</span>
+    <div className="flex flex-col h-screen bg-[#faf9f6] text-stone-900 font-sans selection:bg-amber-500/20 selection:text-amber-900 overflow-hidden">
+      {/* Top Header */}
+      <header className="h-14 border-b border-[#e8e6df] bg-white/95 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-10 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <Link 
+            href="/" 
+            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800 transition"
+            title="Back to Overview"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-600 flex items-center justify-center shadow-xs">
+              <Bot className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-extrabold text-stone-900 tracking-tight">Vyapar AI</span>
+                <span className="text-xs text-stone-500 font-medium hidden sm:inline">• Rajesh Hardware (Thane West)</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Live
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
 
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleResetChat}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-stone-700 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-lg transition"
+            title="Start a new conversation"
+          >
+            <RotateCcw className="h-3.5 w-3.5 text-stone-500" />
+            <span className="hidden sm:inline">New Chat</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleClearChat}
+            className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+            title="Clear history"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
 
-      {/* Action Confirmation Modal */}
-      <ActionConfirmationModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onConfirm={handleConfirmExecuteAction}
-        actionTitle={modalTitle}
-        actionType={modalActionType}
-        payload={modalPayload}
-      />
+      {/* Main Chat Workspace */}
+      <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 scroll-smooth">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {messages.length === 0 ? (
+            /* Clean Empty State with Pitch Demo Story Cards */
+            <div className="py-12 text-center space-y-6">
+              <div className="mx-auto h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-700 border border-amber-500/20 flex items-center justify-center shadow-xs">
+                <Sparkles className="h-7 w-7 animate-pulse" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="text-xl font-extrabold text-stone-900 tracking-tight">
+                  Vyapar AI — Rajesh Hardware & Electricals (Thane West)
+                </h2>
+                <p className="text-xs text-stone-500 max-w-md mx-auto">
+                  Click any pitch story step below to run the exact judge demo sequence.
+                </p>
+              </div>
 
-      {/* Vyapar Supplier Reorder Modal */}
-      <VyaparSupplierModal 
-        isOpen={isVyaparSupplierModalOpen}
-        onClose={() => setIsVyaparSupplierModalOpen(false)}
-        onConfirmOrder={handleSupplierOrderConfirm}
-      />
+              {/* Starter Pitch Demo Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto pt-2 text-left">
+                {PITCH_DEMO_STEPS.map((step, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleRunDemoStep(idx)}
+                    className="p-3.5 rounded-xl border border-[#e5e3dc] bg-white hover:border-amber-400/80 hover:shadow-xs transition group flex items-start gap-3"
+                  >
+                    <div className="p-2 rounded-lg bg-stone-100 group-hover:bg-amber-100 text-stone-600 group-hover:text-amber-800 transition flex-shrink-0 font-mono text-xs font-bold">
+                      {step.time}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-stone-800 group-hover:text-amber-900">
+                        {step.stepNumber}. {step.name}
+                      </div>
+                      <div className="text-[11px] text-stone-500 line-clamp-1 mt-0.5">
+                        &quot;{step.prompt}&quot;
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Message Stream */
+            messages.map((msg) => {
+              const isUser = msg.sender === 'user';
+              const isSpeaking = speakingMsgId === msg.id;
+              const hasReasoning = msg.reasoningSteps && msg.reasoningSteps.length > 0;
+              const isReasoningExpanded = expandedReasoningMap[msg.id];
 
-      {/* Vyapar Customer WhatsApp Recovery Modal */}
-      <VyaparCustomerRecoveryModal 
-        isOpen={isVyaparRecoveryModalOpen}
-        onClose={() => setIsVyaparRecoveryModalOpen(false)}
-        onSendReminders={handleRecoveryRemindersSent}
-      />
+              return (
+                <div 
+                  key={msg.id} 
+                  className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
+                >
+                  {/* Assistant Avatar */}
+                  {!isUser && (
+                    <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-600 flex-shrink-0 flex items-center justify-center text-white shadow-xs mt-1">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                  )}
 
-      {/* Agent Inspector Drawer */}
-      <AgentInspectorDrawer 
-        agent={inspectingAgent}
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-      />
+                  {/* Message Bubble Container */}
+                  <div className={`max-w-[88%] sm:max-w-[80%] space-y-2 ${isUser ? 'items-end' : 'items-start'}`}>
+                    {isUser ? (
+                      <div className="bg-[#2d2a26] text-white px-4 py-3 rounded-2xl rounded-tr-xs text-xs font-medium shadow-xs leading-relaxed whitespace-pre-wrap">
+                        {msg.finalAnswer}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Collapsible Reasoning Process (Minimalist) */}
+                        {hasReasoning && (
+                          <div className="rounded-xl border border-[#e5e3dc] bg-white overflow-hidden text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedReasoningMap(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+                              className="w-full px-3.5 py-2 flex items-center justify-between text-stone-600 hover:text-stone-900 bg-stone-50/60 hover:bg-stone-50 transition text-[11px] font-medium"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Zap className="h-3 w-3 text-amber-600" />
+                                <span>Multi-Agent Swarm Reasoning ({msg.reasoningSteps?.length} steps)</span>
+                              </div>
+                              {isReasoningExpanded ? (
+                                <ChevronDown className="h-3.5 w-3.5 text-stone-400" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5 text-stone-400" />
+                              )}
+                            </button>
 
-      {/* Enterprise Collapsible Sidebar */}
-      <Sidebar 
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        agents={currentAgents}
-        isCollapsed={isSidebarCollapsed}
-        setIsCollapsed={setIsSidebarCollapsed}
-        healthScore={healthScore}
-        onShowToast={showToast}
-      />
+                            {isReasoningExpanded && (
+                              <div className="p-3 bg-stone-50/30 border-t border-[#eeebe3] space-y-2 text-[11px]">
+                                {msg.reasoningSteps?.map((step, sIdx) => (
+                                  <div key={sIdx} className="space-y-0.5 border-l-2 border-amber-500/40 pl-2.5">
+                                    <div className="font-bold text-stone-800">{step.agentName}</div>
+                                    <div className="text-stone-600 leading-relaxed">{step.thought}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
-      {/* Main Workspace Body */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Navbar 
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          agents={currentAgents}
-          isLiveSimulating={isLiveSimulating}
-          setIsLiveSimulating={setIsLiveSimulating}
-          healthScore={healthScore}
-          storeMode={storeMode}
-          onToggleStoreMode={(mode) => {
-            setStoreMode(mode);
-            if (mode === 'vyapar') {
-              setSkus(VYAPAR_SKUS);
-            } else {
-              setSkus(INITIAL_SKUS);
-            }
-          }}
-          onSignOut={handleSignOut}
-          onShowToast={showToast}
-        />
+                        {/* Main Assistant Markdown Card */}
+                        <div className="bg-white border border-[#e8e6df] rounded-2xl rounded-tl-xs p-4 sm:p-5 shadow-xs text-xs">
+                          <MarkdownPreview 
+                            content={msg.finalAnswer || ''}
+                            showToggle={false}
+                            className="border-0 bg-transparent p-0 shadow-none"
+                          />
 
-        <main className="flex-1 overflow-y-auto px-4 lg:px-8 py-6 space-y-6">
-          {/* Judges Pitch Stepper Banner */}
-          <VyaparPitchDemoBanner 
-            currentStepIndex={pitchStepIndex}
-            onSelectStep={handlePitchStepSelect}
-            language={language}
-            onLanguageChange={(lang) => {
-              setLanguage(lang);
-              showToast(`Language switched to ${lang.toUpperCase()}`);
+                          {/* Quick Action Suggestions / Demo Chaining Buttons */}
+                          {msg.suggestedActions && msg.suggestedActions.length > 0 && (
+                            <div className="mt-4 pt-3 border-t border-stone-100 flex flex-wrap gap-2">
+                              {msg.suggestedActions.map((action, aIdx) => (
+                                <button
+                                  key={aIdx}
+                                  onClick={() => handleSendMessage(action.payload?.query || action.label)}
+                                  className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-[11px] font-bold transition flex items-center gap-1.5 shadow-2xs group"
+                                >
+                                  <Sparkles className="h-3 w-3 text-amber-600 group-hover:scale-110 transition" />
+                                  <span>{action.label}</span>
+                                  <ArrowRight className="h-3 w-3 text-amber-700" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Subtle Action Toolbar */}
+                        <div className="flex items-center gap-2 text-[11px] text-stone-400 px-1">
+                          <span>{msg.timestamp}</span>
+                          <span>•</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(msg.id, msg.finalAnswer || '')}
+                            className="hover:text-stone-700 transition flex items-center gap-1"
+                            title="Copy response"
+                          >
+                            {copiedMsgId === msg.id ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-600" />
+                                <span className="text-emerald-700">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                          <span>•</span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSpeak(msg.id, msg.finalAnswer || '')}
+                            className="hover:text-stone-700 transition flex items-center gap-1"
+                            title="Listen to response"
+                          >
+                            {isSpeaking ? (
+                              <>
+                                <VolumeX className="h-3 w-3 text-amber-600" />
+                                <span className="text-amber-700 font-bold">Stop</span>
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="h-3 w-3" />
+                                <span>Voice Readout</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* User Avatar */}
+                  {isUser && (
+                    <div className="h-8 w-8 rounded-xl bg-stone-200 flex-shrink-0 flex items-center justify-center text-stone-700 shadow-xs mt-1">
+                      <User className="h-4 w-4" />
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          {/* Thinking / Loading Bubble */}
+          {isLoading && (
+            <div className="flex gap-3 justify-start items-center">
+              <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-600 flex-shrink-0 flex items-center justify-center text-white shadow-xs">
+                <Bot className="h-4 w-4 animate-spin" />
+              </div>
+              <div className="bg-white border border-[#e8e6df] px-4 py-2.5 rounded-2xl rounded-tl-xs shadow-xs text-xs font-medium text-stone-600 flex items-center gap-2">
+                <span className="flex gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce [animation-delay:0.2s]"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce [animation-delay:0.4s]"></span>
+                </span>
+                <span>Vyapar AI is synthesizing Rajesh Hardware records...</span>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+      </main>
+
+      {/* Clean Bottom Input Section */}
+      <footer className="p-4 sm:px-6 bg-gradient-to-t from-[#faf9f6] via-[#faf9f6] to-transparent flex-shrink-0">
+        <div className="max-w-3xl mx-auto space-y-2">
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendMessage();
             }}
-            isVoiceEnabled={isVoiceEnabled}
-            onToggleVoice={() => {
-              const next = !isVoiceEnabled;
-              setIsVoiceEnabled(next);
-              showToast(next ? 'AI Voice Readout Active' : 'AI Voice Readout Muted');
-            }}
-            onTriggerMic={() => {
-              setActiveTab('chat');
-              showToast('Microphone active. Talk to Vyapar AI in Hinglish/Marathi/English!');
-            }}
-            activeLoopPhase={activeLoopPhase}
-          />
-
-          {activeTab === 'executive' && (
-            <ExecutiveSummaryView 
-              agents={currentAgents}
-              recommendations={recommendations}
-              insights={activeInsights}
-              skus={skus}
-              sales={salesHistory}
-              expenses={expenses}
-              feedbacks={feedbacks}
-              healthScore={healthScore}
-              storeMode={storeMode}
-              onExecuteAction={handleActionClick}
-              onNavigateToTab={(tab) => setActiveTab(tab)}
-              onInspectAgent={handleInspectAgent}
+            className="relative flex items-end bg-white border border-[#dcd9d0] focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 rounded-2xl shadow-sm transition overflow-hidden"
+          >
+            <textarea
+              ref={textareaRef}
+              value={inputQuery}
+              onChange={(e) => {
+                setInputQuery(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask anything about Rajesh Hardware... (Press Enter to send)"
+              rows={1}
+              className="w-full resize-none py-3.5 pl-4 pr-24 bg-transparent text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none max-h-36 leading-relaxed"
             />
-          )}
 
-          {activeTab === 'sales' && (
-            <SalesAgentView 
-              salesHistory={salesHistory}
-              skus={skus}
-              onExecuteAction={handleActionClick}
-            />
-          )}
+            <div className="absolute right-2 bottom-2 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={startListening}
+                className={`p-2 rounded-xl transition ${
+                  isListening 
+                    ? 'bg-rose-500 text-white animate-pulse' 
+                    : 'text-stone-400 hover:text-stone-700 hover:bg-stone-100'
+                }`}
+                title="Speak in Hindi / Hinglish / English"
+              >
+                {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </button>
 
-          {activeTab === 'inventory' && (
-            <InventoryAgentView 
-              skus={skus}
-              onExecuteAction={handleActionClick}
-            />
-          )}
+              <button
+                type="submit"
+                disabled={!inputQuery.trim() || isLoading}
+                className={`p-2 rounded-xl transition ${
+                  inputQuery.trim() && !isLoading
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                    : 'text-stone-300 bg-stone-100 cursor-not-allowed'
+                }`}
+                title="Send Message"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+          </form>
 
-          {activeTab === 'finance' && (
-            <FinanceAgentView 
-              expenses={expenses}
-              onExecuteAction={handleActionClick}
-            />
-          )}
-
-          {activeTab === 'customer' && (
-            <CustomerAgentView 
-              feedbacks={feedbacks}
-              onExecuteAction={handleActionClick}
-            />
-          )}
-
-          {activeTab === 'market' && (
-            <MarketAgentView 
-              signals={signals}
-            />
-          )}
-
-          {activeTab === 'chat' && (
-            <MultiAgentChatConsole 
-              messages={messages}
-              agents={currentAgents}
-              isLoading={isAgentThinking}
-              storeMode={storeMode}
-              onSendMessage={handleSendMessage}
-              onExecuteAction={handleActionClick}
-            />
-          )}
-
-          {activeTab === 'integrations' && (
-            <DataIntegrationHub 
-              dataSources={dataSources}
-              onTriggerSimulatedEvent={handleTriggerSimulatedEvent}
-            />
-          )}
-        </main>
-      </div>
+          <div className="flex items-center justify-between text-[11px] text-stone-400 px-2">
+            <span>Vyapar AI • Dedicated to Rajesh Hardware & Electricals (Thane West)</span>
+            <span>Enter to send • Shift + Enter for new line</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

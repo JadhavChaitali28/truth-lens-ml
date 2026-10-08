@@ -174,7 +174,7 @@ export async function queryLiveGeminiAgent(
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, skus, sales, expenses, feedbacks, signals, targetAgentId })
+      body: JSON.stringify({ query, skus, sales, expenses, feedbacks, signals, targetAgentId, storeMode: 'vyapar' })
     });
 
     if (res.ok) {
@@ -302,8 +302,11 @@ Here is your shop status for **Rajesh Hardware & Electricals (Thane West)**:
 
   // 2. Low-Stock Reorder & 3-Supplier Comparison: "Haan, low-stock item order kar do"
   if (
-    normalized.includes('order') && (normalized.includes('low') || normalized.includes('stock') || normalized.includes('pvc') || normalized.includes('kar do') || normalized.includes('haan')) ||
-    normalized.includes('supplier') && (normalized.includes('price') || normalized.includes('rate') || normalized.includes('best') || normalized.includes('compare'))
+    normalized.includes('low') ||
+    normalized.includes('pvc') ||
+    normalized.includes('item order') ||
+    (normalized.includes('supplier') && (normalized.includes('price') || normalized.includes('rate') || normalized.includes('best') || normalized.includes('compare'))) ||
+    (normalized.includes('order') && (normalized.includes('stock') || normalized.includes('pipe') || normalized.includes('item')))
   ) {
     participatingAgents = ['procurement', 'inventory', 'orchestrator'];
 
@@ -358,7 +361,8 @@ Purchase order is ready. Click below or say *"Order kar do"* to confirm.`;
     ];
 
     suggestedActions = [
-      { label: "Order kar do (Create PO - ₹12,450)", actionType: "vyapar_create_po", payload: { supplier: "Mahesh Traders", amount: 12450, item: "1-inch PVC Pipe" } }
+      { label: "Order kar do", actionType: "query", payload: { query: "Order kar do." } },
+      { label: "Kaunse customers ne payment nahi kiya?", actionType: "query", payload: { query: "Kaunse customers ne payment nahi kiya?" } }
     ];
 
     return {
@@ -366,6 +370,72 @@ Purchase order is ready. Click below or say *"Order kar do"* to confirm.`;
       sender: 'coo',
       queryText: query,
       fileName: 'supplier-rate-comparison.md',
+      participatingAgents,
+      reasoningSteps,
+      finalAnswer,
+      keyDataPoints,
+      suggestedActions,
+      timestamp: nowStr
+    };
+  }
+
+  // 2b. Confirm PVC Purchase Order: "Order kar do"
+  else if (
+    normalized.replace(/[.,!]/g, '').trim() === 'order kar do' ||
+    normalized.replace(/[.,!]/g, '').trim() === 'haan order kar do' ||
+    normalized.startsWith('order kar do') ||
+    (normalized.includes('order') && (normalized.includes('confirm') || normalized.includes('mahesh')))
+  ) {
+    participatingAgents = ['procurement', 'orchestrator'];
+
+    reasoningSteps.push({
+      agentId: 'procurement',
+      agentName: 'Procurement Agent',
+      phase: 'domain_analysis',
+      thought: 'Generated Purchase Order PO-2026-PVC-50 for Mahesh Traders (Bhiwandi Market). Total amount ₹12,450 for 50 bundles 1-inch Heavy PVC Conduit Pipe.',
+      dataCited: ['PO: PO-2026-PVC-50', 'Supplier: Mahesh Traders', 'Total: ₹12,450', 'Saving: ₹670'],
+      timestamp: nowStr
+    });
+
+    reasoningSteps.push({
+      agentId: 'orchestrator',
+      agentName: 'Vyapar AI (Decision Manager)',
+      phase: 'final_synthesis',
+      thought: 'Dispatched electronic PO via WhatsApp Business & Email to Mahesh Traders. Delivery confirmed for tomorrow morning 10:00 AM before shop opening.',
+      dataCited: ['Delivery: Tomorrow 10:00 AM', 'Confirmed Rate: ₹12,450'],
+      timestamp: nowStr
+    });
+
+    finalAnswer = `### ✅ Done. Purchase order created!
+
+| PO Number | Supplier | Items Ordered | Total Cost | Net Saving | Delivery Expected |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **PO-2026-PVC-50** | **Mahesh Traders (Bhiwandi)** | **50 Bundles (1-inch Heavy PVC Pipe)** | **₹12,450** | **₹670 Saved** | **Tomorrow 10:00 AM** (Before shop opens) |
+
+---
+- 📦 **Order Status**: Transmitted directly to Mahesh Traders via WhatsApp.
+- 🚚 **Delivery**: Tomorrow morning at Rajesh Hardware counter (Thane West).
+- 💰 **Direct Savings**: **₹670** saved compared to Patel Suppliers.
+
+*Purchase order is active. What would you like to check next, Rajesh Bhai?*`;
+
+    keyDataPoints = [
+      { label: "Purchase Order", value: "PO-2026-PVC-50" },
+      { label: "Confirmed Vendor", value: "Mahesh Traders" },
+      { label: "Amount", value: "₹12,450" },
+      { label: "Savings Locked", value: "₹670" }
+    ];
+
+    suggestedActions = [
+      { label: "Kaunse customers ne payment nahi kiya?", actionType: "query", payload: { query: "Kaunse customers ne payment nahi kiya?" } },
+      { label: "Business improve kaise kar sakte hai?", actionType: "query", payload: { query: "Business improve kaise kar sakte hai?" } }
+    ];
+
+    return {
+      id: `msg-${Date.now()}`,
+      sender: 'coo',
+      queryText: query,
+      fileName: 'purchase-order-created.md',
       participatingAgents,
       reasoningSteps,
       finalAnswer,
@@ -591,8 +661,71 @@ Vyapar AI is actively monitoring your BharatPe/Bank account for incoming settlem
     };
   }
 
-  // 5. Proactive Wire Spike Prediction: "Copper wire stock status" / "predictive alert"
+  // 5b. Confirm Copper Wire PO: "Order 150 rolls copper wire"
   if (
+    (normalized.includes('150') && (normalized.includes('wire') || normalized.includes('copper') || normalized.includes('roll'))) ||
+    (normalized.includes('order') && (normalized.includes('copper') || normalized.includes('wire')))
+  ) {
+    participatingAgents = ['procurement', 'inventory', 'orchestrator'];
+
+    reasoningSteps.push({
+      agentId: 'procurement',
+      agentName: 'Procurement Agent',
+      phase: 'domain_analysis',
+      thought: 'Created Purchase Order PO-2026-WIRE-150 for Finolex Wholesale Distributor. 150 rolls of 2.5 sq mm FR Copper Wire at distributor wholesale rate (₹1,420/roll). Total PO: ₹2,13,000.',
+      dataCited: ['PO: PO-2026-WIRE-150', 'Qty: 150 Rolls', 'Total: ₹2,13,000', 'Margin: ₹430/roll'],
+      timestamp: nowStr
+    });
+
+    reasoningSteps.push({
+      agentId: 'orchestrator',
+      agentName: 'Vyapar AI (Decision Manager)',
+      phase: 'final_synthesis',
+      thought: 'Proactive purchase order successfully dispatched. Prevents stockout during peak Thane electrical renovation rush and secures ₹45,000+ in at-risk sales.',
+      dataCited: ['Sales Protected: ₹45,000+', 'Delivery: Tomorrow 2:00 PM'],
+      timestamp: nowStr
+    });
+
+    finalAnswer = `### ⚡ Purchase Order Created: 150 Rolls Finolex Copper Wire
+
+| PO Number | Supplier / Distributor | Item & Qty | Total Cost | Protected Revenue | Expected Arrival |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **PO-2026-WIRE-150** | **Finolex Wholesale Distributor** | **150 Rolls (2.5 sq mm FR)** | **₹2,13,000** | **₹45,000+ Lost Sales Prevented** | **Tomorrow 2:00 PM** |
+
+---
+
+- 📦 **Order Dispatched**: PO-2026-WIRE-150 sent directly to Finolex Wholesale Distributor.
+- 🚚 **Delivery Expected**: Tomorrow 2:00 PM at Rajesh Hardware (Thane West).
+- 💼 **Business Protection**: Prevents stockout during local renovation rush and secures **₹45,000+** counter sales.`;
+
+    keyDataPoints = [
+      { label: "Purchase Order", value: "PO-2026-WIRE-150" },
+      { label: "Item", value: "Finolex 2.5mm Wire" },
+      { label: "Quantity", value: "150 Rolls" },
+      { label: "Protected Sales", value: "₹45,000+" }
+    ];
+
+    suggestedActions = [
+      { label: "Aaj shop ka status batao", actionType: "query", payload: { query: "Good morning. Aaj shop ka status batao." } },
+      { label: "Check Other Low-Stock Items", actionType: "query", payload: { query: "Inventory may kya kya stocks khali hay?" } }
+    ];
+
+    return {
+      id: `msg-${Date.now()}`,
+      sender: 'coo',
+      queryText: query,
+      fileName: 'wire-purchase-order-executed.md',
+      participatingAgents,
+      reasoningSteps,
+      finalAnswer,
+      keyDataPoints,
+      suggestedActions,
+      timestamp: nowStr
+    };
+  }
+
+  // 5. Proactive Wire Spike Prediction: "Copper wire stock status" / "predictive alert"
+  else if (
     normalized.includes('copper') ||
     normalized.includes('wire') ||
     normalized.includes('predict') ||
@@ -627,30 +760,30 @@ Vyapar AI is actively monitoring your BharatPe/Bank account for incoming settlem
       timestamp: nowStr
     });
 
-    finalAnswer = `⚡ **Proactive Predictive AI Alert: Copper Wire Demand Spike**
+    finalAnswer = `### 📦 Copper Wire Stock Status: Finolex 2.5 sq mm FR
 
-Vyapar AI doesn't wait for you to ask. It proactively detected:
-
-- **Sales Velocity**: Copper wire sales have increased by **38% over the last 10 days**.
-- **Stock Depletion Risk**: At the current rate, stock will finish in **four days** (12 rolls left).
-- **Recommended Order**: **150 rolls** of Finolex 2.5 sq mm FR wire.
-- **Potential Lost Sales if Ignored**: **₹45,000+**.
+| Metric | Current Status | Details |
+| :--- | :--- | :--- |
+| **Current Stock** | **12 Rolls Remaining** | Finolex 2.5 sq mm FR Red/Black |
+| **Depletion Velocity** | **3.0 Rolls / Day** | Sales surged **+38%** over last 10 days |
+| **Stock Exhaustion** | **In 4 Days** | Urgent reorder required before weekend |
+| **Recommended Reorder** | **150 Rolls** | Prevents **₹45,000+** in lost customer sales |
 
 ---
 
-> **The Power of Predictive AI**:  
-> Instead of telling you *"Your inventory is low,"*  
-> We tell you: *"This is what is going to happen, this is why, and this is what you should do."*`;
+- **Current Balance**: Only **12 rolls** left at Rajesh Hardware counter.
+- **Runway**: At current sales velocity, stock will be **exhausted in 4 days**.
+- **Recommended Action**: Order **150 rolls** now to maintain supply and secure **₹45,000+ revenue**.`;
 
     keyDataPoints = [
+      { label: "Current Stock", value: "12 Rolls" },
       { label: "Sales Spike", value: "+38% (10 days)" },
       { label: "Stock Exhaustion", value: "In 4 Days" },
-      { label: "Recommended Order", value: "150 Rolls" },
-      { label: "At-Risk Sales", value: "₹45,000+" }
+      { label: "Recommended Order", value: "150 Rolls" }
     ];
 
     suggestedActions = [
-      { label: "Order 150 Rolls Copper Wire", actionType: "vyapar_reorder_copper", payload: { qty: 150, item: "Finolex Copper Wire" } }
+      { label: "Order 150 Rolls Copper Wire", actionType: "query", payload: { query: "Order 150 rolls copper wire." } }
     ];
 
     return {
@@ -668,348 +801,226 @@ Vyapar AI doesn't wait for you to ask. It proactively detected:
   }
 
   // ============================================================================
-  // EXISTING APEX RETAIL QUERY HANDLERS (MAINTAINED)
+  // RAJESH HARDWARE & ELECTRICALS (THANE WEST) - DEDICATED DOMAIN HANDLERS
   // ============================================================================
-  if (normalized.includes('sales') && (normalized.includes('drop') || normalized.includes('fell') || normalized.includes('why') || normalized.includes('month'))) {
 
-    participatingAgents = ['sales', 'inventory', 'market', 'orchestrator'];
+  // 6. Comprehensive Stock & Inventory Query (Hindi, Hinglish, English)
+  if (
+    normalized.includes('inventory') ||
+    normalized.includes('stock') ||
+    normalized.includes('khali') ||
+    normalized.includes('khatam') ||
+    normalized.includes('kam') ||
+    normalized.includes('baki') ||
+    normalized.includes('saman') ||
+    normalized.includes('maal') ||
+    normalized.includes('exhaust') ||
+    normalized.includes('pvc') ||
+    normalized.includes('pipe') ||
+    normalized.includes('pump')
+  ) {
+    participatingAgents = ['inventory', 'procurement', 'orchestrator'];
 
     reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
+      agentId: 'inventory',
+      agentName: 'Inventory Agent',
       phase: 'data_ingestion',
-      thought: 'Query received regarding August sales contraction (₹31.84L vs ₹41.60L target). Decomposing query into Commercial Sales Analytics, Inventory Availability, and Mumbai Competitor Pricing.',
-      dataCited: ['August Revenue: ₹31,84,000', 'Target: ₹41,60,000', 'Deficit: -₹9,76,000'],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'sales',
-      agentName: 'Sales Intelligence Agent',
-      phase: 'domain_analysis',
-      thought: 'Analyzed transaction logs. Monsooned Malabar Arabica (SKU-884) experienced a 44% drop in weekly order volume during the final 10 days of August, causing 68% of total revenue shortfall.',
-      dataCited: ['SKU-884 Orders: -44%', 'AOV: ₹3,061.54', 'Channel POS: -22%'],
+      thought: 'Audited current inventory levels across all electrical and hardware categories at Rajesh Hardware & Electricals (Thane West).',
+      dataCited: ['1-inch PVC: 4 bundles', '2.5mm Copper Wire: 12 rolls', 'LED Battens: 85 units', 'Water Pumps: 14 units'],
       timestamp: nowStr
     });
 
     reasoningSteps.push({
       agentId: 'inventory',
-      agentName: 'Inventory Operations Agent',
+      agentName: 'Inventory Agent',
       phase: 'domain_analysis',
-      thought: 'Cross-referenced inventory depletion records. SKU-884 stock fell below minimum safety threshold (100 units) on Aug 21, resulting in stockouts and unfulfilled cart abandonments.',
-      dataCited: ['SKU-884 Current Stock: 42 units', 'Depletion: 14.2 units/day', 'Stockout Date: 3 Days'],
+      thought: 'Critical stockout alert: 1-inch Heavy PVC Conduit Pipe has only 4 bundles remaining (burn rate 1.3 bundles/day) and will exhaust in 3 days. Finolex Copper Wire is running low with 4 days stock remaining after a +38% demand spike.',
+      dataCited: ['PVC Days Left: 3 Days (Critical)', 'Copper Wire Days Left: 4 Days (Low)', 'Pumps: 140 Days (Dead Stock)'],
       timestamp: nowStr
     });
 
     reasoningSteps.push({
-      agentId: 'market',
-      agentName: 'Market Intelligence Agent',
+      agentId: 'procurement',
+      agentName: 'Procurement Agent',
       phase: 'domain_analysis',
-      thought: 'Scanned competitor positioning. Direct rival Blue Tokai introduced a 20% flash discount (₹2,280/kg) across Mumbai outlets on Aug 24, diverting price-sensitive wholesale cafes.',
-      dataCited: ['Competitor Price: ₹2,280', 'Our Price: ₹2,850', 'Market Share Drag: ~8%'],
+      thought: 'Compared wholesale supplier quotes for 50 bundles 1-inch PVC pipe. Mahesh Traders (Bhiwandi) offers best rate at ₹12,450 (saves ₹670 vs Patel ₹13,120).',
+      dataCited: ['Best Vendor: Mahesh Traders (₹12,450)', 'Saving: ₹670', 'Delivery: Tomorrow 10 AM'],
       timestamp: nowStr
     });
 
     reasoningSteps.push({
       agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
+      agentName: 'Vyapar AI (Decision Manager)',
       phase: 'final_synthesis',
-      thought: 'Synthesized multi-agent inputs. Primary root cause of sales drop is a combination of inventory stockouts for SKU-884 (+68% impact) and competitor price undercut (+32% impact). Resolving by recommending an emergency air-cargo reorder coupled with a Mumbai loyalty customer outreach.',
-      dataCited: ['Combined Deficit Root Cause Identified', 'Action Plan Generated'],
+      thought: 'Synthesized inventory report for Rajesh Bhai. Recommending immediate reorder of PVC pipes from Mahesh Traders and 150 rolls Copper wire to protect ₹45,000+ counter revenue.',
+      dataCited: ['Actionable POs Ready', 'Thane West Shop Operational'],
       timestamp: nowStr
     });
 
-    finalAnswer = `Sales dropped in August primarily due to a **₹9,76,000 deficit against target**, driven by two converging factors:\n\n1. **Stockout in Top Revenue Driver (SKU-884)**: Monsooned Malabar Arabica stock fell to 42 units (only 3 days left), causing a 44% drop in order completion during the last 10 days of August.\n2. **Competitor Flash Discount**: Rival brand Blue Tokai launched a 20% price promotion (₹2,280/kg vs our ₹2,850/kg), capturing price-sensitive commercial accounts across Mumbai.\n\n**Recommended Strategic Response**:\n- Issue emergency expedited air-cargo PO for 250 units of SKU-884 from Western Ghats.\n- Launch a targeted 10% bundle incentive for wholesale subscribers in South Bombay.`;
+    finalAnswer = `Here is the live stock & inventory status for **Rajesh Hardware & Electricals (Thane West)**:
+
+| Item Name | Category | Current Stock | Daily Usage | Days Remaining | Stock Status | Action Required |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **🚨 1-inch Heavy PVC Conduit Pipe (25m)** | Pipes & Fittings | **4 Bundles** | 1.3 / day | **3 Days** | **CRITICAL** | **Reorder 50 bundles now** (Mahesh Traders ₹12,450) |
+| **⚠️ Finolex 2.5 sq mm FR Copper Wire (90m)** | Electricals & Wiring | **12 Rolls** | 3.0 / day | **4 Days** | **LOW STOCK** | **Reorder 150 rolls** (Demand spiked +38%) |
+| **✅ Philips & Havells 20W LED Batten & Bulbs** | Lighting | **85 Units** | 8.5 / day | **10 Days** | **OPTIMAL** | Healthy stock (32% high margin) |
+| **📦 Crompton 1.0 HP Submersible Water Pump** | Heavy Machinery | **14 Units** | 0.1 / day | **140 Days** | **DEAD STOCK** | Slow moving (8% margin, blocking 30% floor) |
+
+---
+
+### ⚡ Summary for Rajesh Bhai:
+1. **Khali Hone Wala Stock (Urgent)**:
+   - **1-inch PVC Pipe** sirf **3 din** mein khatam ho jayega (4 bundles baki).
+   - **2.5 sq mm Copper Wire** **4 din** mein khatam ho jayega (12 rolls baki, +38% demand spike).
+2. **Recommended Action**:
+   - **Mahesh Traders (Bhiwandi)** se 50 bundles PVC pipe ka order confirm karein (₹12,450 — **₹670 ki bachat**).
+   - Finolex distributor se **150 rolls copper wire** mangwa lein taaki **₹45,000+ ki bikri miss na ho**.`;
 
     keyDataPoints = [
-      { label: 'August Revenue', value: '₹31,84,000 (-23.4%)' },
-      { label: 'SKU-884 Stock Remaining', value: '42 Units (3 Days)' },
-      { label: 'Competitor Price Difference', value: '+₹570 / kg' }
+      { label: "1-inch PVC Pipe", value: "4 Bundles (3 Days Left)" },
+      { label: "Copper Wire", value: "12 Rolls (4 Days Left)" },
+      { label: "Best Supplier (PVC)", value: "Mahesh Traders (₹12,450)" },
+      { label: "Potential Saving", value: "₹670" }
     ];
 
     suggestedActions = [
-      { label: 'Issue Expedited Reorder PO (₹3,30,000)', actionType: 'reorder', payload: { skuId: 'SKU-884', qty: 250 } },
-      { label: 'Launch Wholesale Loyalty Offer', actionType: 'discount', payload: { targetCategory: 'Artisanal Beverages' } }
+      { label: "Haan, low-stock item order kar do", actionType: "vyapar_supplier_modal", payload: { item: "1-inch PVC Pipe" } },
+      { label: "Order 150 Rolls Copper Wire", actionType: "vyapar_reorder_copper", payload: { qty: 150, item: "Finolex Copper Wire" } },
+      { label: "Aaj shop ka status batao", actionType: "query", payload: { query: "Aaj shop ka status batao" } }
     ];
-  } 
-  else if (normalized.includes('stockout') || (normalized.includes('stock') && (normalized.includes('out') || normalized.includes('next week') || normalized.includes('deplet')))) {
-    participatingAgents = ['inventory', 'sales', 'finance', 'orchestrator'];
-
-    reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
-      phase: 'data_ingestion',
-      thought: 'Evaluating 7-day SKU stock depletion models and supplier lead time constraints across all active SKUs in Bhiwandi and Mumbai warehouses.',
-      dataCited: ['Active SKUs Analyzed: 6', 'Depletion Window: 7 Days'],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'inventory',
-      agentName: 'Inventory Operations Agent',
-      phase: 'domain_analysis',
-      thought: 'Predictive algorithm flagged 2 SKUs reaching zero balance within 7 days: SKU-884 (Monsooned Malabar Arabica, 3 days left) and SKU-990 (Noise-Cancelling Wireless Earbuds, 4 days left). SKU-771 (Sheesham Wood Laptop Stand) is also at low safety stock level (16 days left).',
-      dataCited: ['SKU-884: 3 Days Stock', 'SKU-990: 4 Days Stock', 'SKU-771: 16 Days Stock'],
-      timestamp: nowStr
-    });
+  }
+  // 7. Sales, Revenue & Bikri
+  else if (
+    normalized.includes('sales') ||
+    normalized.includes('revenue') ||
+    normalized.includes('bikri') ||
+    normalized.includes('kamai') ||
+    normalized.includes('dhanda')
+  ) {
+    participatingAgents = ['sales', 'finance', 'orchestrator'];
 
     reasoningSteps.push({
       agentId: 'sales',
-      agentName: 'Sales Intelligence Agent',
-      phase: 'domain_analysis',
-      thought: 'Cross-checked demand velocity. SKU-884 accounts for ₹40,470 daily revenue. A stockout over 7 days will result in ₹2,83,290 in forfeited sales.',
-      dataCited: ['SKU-884 Daily Revenue: ₹40,470', 'SKU-990 Daily Revenue: ₹26,562'],
+      agentName: 'Sales Agent',
+      phase: 'data_ingestion',
+      thought: 'Aggregated counter billing ledger for Rajesh Hardware & Electricals (Thane West). Yesterday recorded 38 customer bills across counter cash and BharatPe QR.',
+      dataCited: ['Yesterday Sales: ₹48,750', 'Gross Profit: ₹14,625', 'Net Profit: ₹11,430'],
       timestamp: nowStr
     });
 
     reasoningSteps.push({
       agentId: 'finance',
-      agentName: 'Finance & Liquidity Agent',
+      agentName: 'Finance Agent',
       phase: 'domain_analysis',
-      thought: 'Checked liquidity balance. Cash buffer of ₹11,36,000 is available to cover combined PO expenditures of ₹5,94,000 for SKU-884 and SKU-990 without breaching minimum cash safety threshold (₹8,00,000).',
-      dataCited: ['Available Liquidity: ₹11,36,000', 'Required PO Cash: ₹5,94,000', 'Post-PO Buffer: ₹5,42,000'],
+      thought: 'Net profit closed at ₹11,430 (23.4% margin) after accounting for helper wages and daily operational overheads. Projected today revenue is ₹52,000–₹58,000.',
+      dataCited: ['Net Margin: 23.4%', 'Today Forecast: ₹52,000–₹58,000'],
       timestamp: nowStr
     });
 
     reasoningSteps.push({
       agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
+      agentName: 'Vyapar AI (Decision Manager)',
       phase: 'final_synthesis',
-      thought: 'Synthesized Inventory risk with Sales revenue impact and Finance liquidity. Prioritizing immediate PO release for SKU-884 and SKU-990.',
-      dataCited: ['Reorder Authorization Ready', 'Zero Cash Bottleneck'],
+      thought: 'Sales velocity is strong in electricals (+38% copper wire). Recommending focus on contractor combo kits to push counter ticket size above ₹1,800.',
+      dataCited: ['Electrician Combos Recommended'],
       timestamp: nowStr
     });
 
-    finalAnswer = `Based on predictive depletion analysis, **2 key products are guaranteed to go out of stock next week** if no purchase order is issued immediately:\n\n1. **Monsooned Malabar Arabica Coffee (SKU-884)**:\n   - Current Stock: **42 units** | Depletion Rate: **14.2 units/day**\n   - Estimated Stockout Date: **3 Days (Thursday)**\n   - Projected Revenue At Risk: **₹2,83,290** over next 7 days.\n\n2. **Noise-Cancelling Wireless Earbuds (SKU-990)**:\n   - Current Stock: **18 units** | Depletion Rate: **3.8 units/day**\n   - Estimated Stockout Date: **4 Days (Friday)**\n   - Projected Revenue At Risk: **₹1,06,248**.\n\n**Executive Action Plan**:\n- Release Purchase Order PO-2026-884 (₹3,30,000) for 250 coffee units to Western Ghats.\n- Release Purchase Order PO-2026-990 (₹2,64,000) for 80 earbud units to Lamington Road Hub.`;
+    finalAnswer = `Here is the sales performance report for **Rajesh Hardware & Electricals (Thane West)**:
+
+| Metric | Amount (₹) | Details |
+| :--- | :--- | :--- |
+| **Yesterday's Counter Sales** | **₹48,750** | 38 customer transactions (Cash + BharatPe UPI) |
+| **Estimated Net Profit** | **₹11,430** | 23.4% net profit margin |
+| **Average Order Value (AOV)** | **₹1,282** | Counter sales + contractor credit bills |
+| **Today's Expected Revenue** | **₹52,000 – ₹58,000** | Based on Thane local construction projects |
+
+---
+
+### 📈 Key Highlights:
+- **Top Velocity Product**: Finolex 2.5 sq mm copper wire sales surged **+38%** in the last 10 days.
+- **Payment Method Split**: 58% BharatPe UPI QR, 42% Counter Cash.
+- **Growth Opportunity**: Introducing contractor bundles (LED batten + switch box + wire) can boost daily sales by an extra ₹6,000–₹8,000.`;
 
     keyDataPoints = [
-      { label: 'Critical Stockout SKUs', value: '2 Items (SKU-884 & 990)' },
-      { label: 'Combined Revenue at Risk', value: '₹3,89,538' },
-      { label: 'Required Reorder Capital', value: '₹5,94,000' }
+      { label: "Yesterday Sales", value: "₹48,750" },
+      { label: "Net Profit", value: "₹11,430 (23.4%)" },
+      { label: "Today Forecast", value: "₹52k–₹58k" },
+      { label: "Transactions", value: "38 Bills" }
     ];
 
     suggestedActions = [
-      { label: 'Issue Dual PO (Coffee & Earbuds)', actionType: 'reorder', payload: { skus: ['SKU-884', 'SKU-990'] } },
-      { label: 'View Inventory Depletion Matrix', actionType: 'navigate', payload: { tab: 'inventory' } }
+      { label: "Kaunse customers ne payment nahi kiya?", actionType: "query", payload: { query: "Kaunse customers ne payment nahi kiya?" } },
+      { label: "Check low-stock items", actionType: "query", payload: { query: "Kaunse products low stock par hai?" } }
     ];
   }
-  else if (normalized.includes('profit') || normalized.includes('margin') || normalized.includes('net') || normalized.includes('ebitda') || normalized.includes('p&l') || normalized.includes('income')) {
-    participatingAgents = ['finance', 'sales', 'inventory', 'orchestrator'];
-
-    const latestSales = sales[sales.length - 1];
-    const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
-    const avgMarginPct = (skus.reduce((acc, s) => acc + (s.price - s.cost) / s.price, 0) / skus.length);
-    const grossProfit = Math.round(latestSales.revenue * avgMarginPct);
-    const netProfit = grossProfit - totalExpenses;
-    const overBudgetExp = expenses.filter(e => e.amount > e.budget);
-    const totalOverrun = overBudgetExp.reduce((acc, curr) => acc + (curr.amount - curr.budget), 0);
-
-    reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
-      phase: 'data_ingestion',
-      thought: `Parsing profitability query: "${query}". Reconciling August sales ledger (₹${latestSales.revenue.toLocaleString()}), SKU-level gross margin weights, and expense cost centers (₹${totalExpenses.toLocaleString()}).`,
-      dataCited: [`Revenue: ₹${latestSales.revenue.toLocaleString()}`, `Total Overheads: ₹${totalExpenses.toLocaleString()}`, `Avg Margin: ${(avgMarginPct * 100).toFixed(1)}%`],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'sales',
-      agentName: 'Sales Intelligence Agent',
-      phase: 'domain_analysis',
-      thought: `Commercial revenue closed at ₹${latestSales.revenue.toLocaleString()} across ${latestSales.orders.toLocaleString()} orders. At an aggregate product margin of ${(avgMarginPct * 100).toFixed(1)}%, top-line revenue generated ₹${grossProfit.toLocaleString()} in gross profit contribution.`,
-      dataCited: [`Gross Profit: ₹${grossProfit.toLocaleString()}`, `AOV: ₹${latestSales.avgOrderValue.toFixed(2)}`],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'finance',
-      agentName: 'Finance & Liquidity Agent',
-      phase: 'domain_analysis',
-      thought: `Audited 5 operational cost centers totaling ₹${totalExpenses.toLocaleString()} (+₹${totalOverrun.toLocaleString()} over budgeted limits). Major cost drag stems from Bhiwandi express freight (₹6,72,000) and performance marketing (₹7,60,000). Subtracting operating expenses (₹${totalExpenses.toLocaleString()}) from gross profit (₹${grossProfit.toLocaleString()}) results in a net operating position of ₹${netProfit.toLocaleString()}.`,
-      dataCited: [`Operating Expenses: ₹${totalExpenses.toLocaleString()}`, `Net Position: ₹${netProfit.toLocaleString()}`, `Overruns: +₹${totalOverrun.toLocaleString()}`],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
-      phase: 'final_synthesis',
-      thought: `Synthesized Net Profit root cause: The net deficit is driven by an August revenue shortfall (₹9.76L below target) combined with ₹5,12,000 in compressible non-core expense overruns. Liquidity remains protected by a ₹11,36,000 cash reserve. Recommending immediate budget capping and high-margin SKU restock.`,
-      dataCited: [`Net Loss Identified: ₹${Math.abs(netProfit).toLocaleString()}`, `Safe Buffer: ₹11,36,000`],
-      timestamp: nowStr
-    });
-
-    const isNegative = netProfit < 0;
-    finalAnswer = `Based on financial ledger analysis for August 2026, your business recorded a **${isNegative ? 'Net Operating Loss' : 'Net Operating Profit'} of ${isNegative ? `-₹${Math.abs(netProfit).toLocaleString()}` : `₹${netProfit.toLocaleString()}`}**:\n\n### 1. Revenue & Gross Margin\n- **August Gross Revenue**: **₹${latestSales.revenue.toLocaleString()}** (-23.4% vs ₹${latestSales.target.toLocaleString()} target)\n- **Average Product Margin**: **${(avgMarginPct * 100).toFixed(1)}%**\n- **Gross Profit**: **₹${grossProfit.toLocaleString()}**\n\n### 2. Operating Overheads Ledger\n${expenses.map(e => `- **${e.category}**: **₹${e.amount.toLocaleString()}** ${e.amount > e.budget ? `(+₹${(e.amount - e.budget).toLocaleString()} over budget)` : '(On budget)'}`).join('\n')}\n- **Total Operating Expenses**: **₹${totalExpenses.toLocaleString()}**\n\n### 3. Bottom-Line Summary\n- **Net Profit / (Loss)**: **${isNegative ? `-₹${Math.abs(netProfit).toLocaleString()}` : `₹${netProfit.toLocaleString()}`}**\n- **Current Cash Buffer**: **₹11,36,000** (Positive liquidity reserve)\n\n**COO Recommended Action to Restore Net Profitability**:\n- Compress **₹5,12,000 in overruns** by capping monsoon air-cargo and trimming cold PPC ad sets.\n- Expedite reorder of top revenue driver **SKU-884** to reclaim ~₹2,83,290 in lost monthly sales.`;
-
-    keyDataPoints = [
-      { label: 'August Revenue', value: `₹${latestSales.revenue.toLocaleString()}` },
-      { label: 'Gross Profit', value: `₹${grossProfit.toLocaleString()} (${(avgMarginPct * 100).toFixed(1)}%)` },
-      { label: 'Total Expenses', value: `₹${totalExpenses.toLocaleString()}` },
-      { label: 'Net Profit / Loss', value: isNegative ? `-₹${Math.abs(netProfit).toLocaleString()}` : `₹${netProfit.toLocaleString()}` }
-    ];
-
-    suggestedActions = [
-      { label: 'Review Expense Reduction Plan', actionType: 'cut_expense', payload: { expenseId: 'exp-101' } },
-      { label: 'Restock High-Margin Coffee (SKU-884)', actionType: 'reorder', payload: { skuId: 'SKU-884', qty: 250 } }
-    ];
-  }
-  else if (normalized.includes('expense') || normalized.includes('cost') || normalized.includes('reduce') || normalized.includes('liquidity')) {
-    participatingAgents = ['finance', 'inventory', 'customer', 'orchestrator'];
-
-    reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
-      phase: 'data_ingestion',
-      thought: 'Analyzing August expense ledgers, cost center variances, and tied-up working capital across all Mumbai business units.',
-      dataCited: ['Total August Overhead: ₹36,56,000', 'Budget Target: ₹31,36,000', 'Variance: +₹5,20,000'],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'finance',
-      agentName: 'Finance & Liquidity Agent',
-      phase: 'domain_analysis',
-      thought: 'Identified 2 primary areas of compressible expense overruns: Bhiwandi Freight Surcharges (+₹3,12,000 over budget) and Digital Marketing Performance Campaigns (+₹2,00,000 over budget with lower ROAS).',
-      dataCited: ['Freight Surcharge: ₹6,72,000 spent vs ₹3,60,000 budget', 'PPC Spend: ₹7,60,000 spent vs ₹5,60,000 budget'],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'inventory',
-      agentName: 'Inventory Operations Agent',
-      phase: 'domain_analysis',
-      thought: 'Highlighted non-operating tied-up capital. 540 units of dead stock SKU-405 (Dharavi Canvas Tote Bags) are holding ₹2,26,800 in stagnant inventory value with zero turnover for 140 days.',
-      dataCited: ['SKU-405 Stagnant Capital: ₹2,26,800', 'Bhiwandi Storage Holding Cost: ₹34,000/mo'],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
-      phase: 'final_synthesis',
-      thought: 'Synthesized cost reduction plan yielding up to ₹7,38,800 in immediate cash flow recovery without impacting core revenue generation.',
-      dataCited: ['Combined Recoverable Capital: ₹7,38,800'],
-      timestamp: nowStr
-    });
-
-    finalAnswer = `The virtual management team identified **3 immediate cost optimization opportunities** to recover up to **₹7,38,800 in liquidity**:\n\n1. **Renegotiate Bhiwandi Logistics Carriers (-₹3,12,000/month)**:\n   - Freight cost reached ₹6,72,000 (+₹3,12,000 over budget) due to ad-hoc monsoon cargo shipments.\n   - Action: Shift non-urgent restocking to consolidated scheduled ground transport.\n\n2. **Optimize Performance Marketing Ad Spend (-₹2,00,000/month)**:\n   - Ad spend reached ₹7,60,000 with diminishing ROAS on cold audience campaigns.\n   - Action: Pause broad Meta ad sets and redirect focus to Mumbai VIP retargeting.\n\n3. **Liquidate Dead Stock SKU-405 (Reclaim ₹2,26,800 Cash)**:\n   - 540 Dharavi Handcrafted Tote Bags have been stagnant for 140+ days.\n   - Action: Run a 50% flash clearance bundle with popular Chai Flask items.`;
-
-    keyDataPoints = [
-      { label: 'Total Recoverable Capital', value: '₹7,38,800' },
-      { label: 'Logistics Cost Overrun', value: '+₹3,12,000 (+86.7%)' },
-      { label: 'Stagnant Working Capital', value: '₹2,26,800 (540 units)' }
-    ];
-
-    suggestedActions = [
-      { label: 'Cap Freight Surcharge Budget', actionType: 'cut_expense', payload: { expenseId: 'exp-101' } },
-      { label: 'Launch Dead Stock Flash Bundle', actionType: 'discount', payload: { skuId: 'SKU-405' } }
-    ];
-  }
-  else if (normalized.includes('whatsapp') || normalized.includes('complaint') || normalized.includes('customer') || normalized.includes('feedback')) {
-    participatingAgents = ['customer', 'sales', 'inventory', 'orchestrator'];
-
-    reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
-      phase: 'data_ingestion',
-      thought: 'Parsing unstructured customer message logs from WhatsApp Business API (Mumbai Line), email tickets, and Google Reviews.',
-      dataCited: ['Parsed Messages: 1,240', 'Negative Feedback Ratio: 28%', 'Unresolved Alerts: 5'],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'customer',
-      agentName: 'Customer Experience Agent',
-      phase: 'domain_analysis',
-      thought: 'NLP Sentiment model extracted top recurring complaint clusters: 54% relate to delayed shipping deliveries from Bhiwandi, 31% relate to stockout cancellations on coffee orders, and 15% relate to delivery fee increases.',
-      dataCited: ['Shipping Delays Cluster: 54%', 'Stockout Cancellations: 31%', 'Price Surprises: 15%'],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'inventory',
-      agentName: 'Inventory Operations Agent',
-      phase: 'domain_analysis',
-      thought: 'Correlated complaint timestamps with inventory log. 80% of WhatsApp complaints occurred between Aug 25-28, coinciding directly with the stockout of SKU-884.',
-      dataCited: ['Correlation Factor: 0.92', 'Impacted VIP Accounts: 3 Commercial Clients'],
-      timestamp: nowStr
-    });
-
-    reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
-      phase: 'final_synthesis',
-      thought: 'Root cause confirmed: WhatsApp complaints are not caused by product quality issues, but rather operational stockouts and monsoon road transport bottlenecks. Recommending direct account manager outreach.',
-      dataCited: ['Operational Root Cause Verified', 'Outreach Strategy Formulated'],
-      timestamp: nowStr
-    });
-
-    finalAnswer = `Analysis of **1,240 customer interactions** reveals that the recent spike in WhatsApp complaints is driven by **operational fulfillment bottlenecks** rather than product defects:\n\n1. **Stockout Delivery Delays (54% of complaints)**:\n   - Wholesale accounts (including *Café Mondegar* in Colaba and *Irani Café & Bakers* in Marine Lines) reported unexpected 3-day delivery delays due to SKU-884 stockouts.\n\n2. **Courier Delivery Fee Surprises (31% of complaints)**:\n   - Customers noted delivery fees jumping from ₹950 to ₹2,240 without prior checkout disclosure.\n\n3. **Unfulfilled Web Reorders (15% of complaints)**:\n   - Out-of-stock messages triggered back-and-forth WhatsApp inquiries.\n\n**Action Plan to Restore Customer Retention**:\n- Send personalized apology & status updates to 3 flagged commercial clients with a 15% credit voucher on their next order.\n- Enable automated WhatsApp tracking notifications for dispatched consignments.`;
-
-    keyDataPoints = [
-      { label: 'Primary Complaint Driver', value: 'Fulfillment Delays (54%)' },
-      { label: 'WhatsApp Negative Sentiment', value: '28% (+12% MoM)' },
-      { label: 'Impacted Key Accounts', value: '3 Commercial Clients' }
-    ];
-
-    suggestedActions = [
-      { label: 'Dispatch VIP Apology & Voucher', actionType: 'contact_customer', payload: { clientIds: ['Café Mondegar', 'Irani Café'] } },
-      { label: 'View Customer Feedback Stream', actionType: 'navigate', payload: { tab: 'customer' } }
-    ];
-  }
+  // 8. General Vyapar AI Fallback (100% Rajesh Hardware & Electricals)
   else {
-    // Custom query handling
-    participatingAgents = ['sales', 'inventory', 'finance', 'customer', 'market', 'orchestrator'];
+    participatingAgents = ['orchestrator', 'sales', 'inventory', 'crm'];
 
     reasoningSteps.push({
       agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
+      agentName: 'Vyapar AI (Decision Manager)',
       phase: 'data_ingestion',
-      thought: `Parsing custom natural language query: "${query}". Initiating multi-agent scan across commercial metrics, operational stock levels, and ledger accounts.`,
-      dataCited: ['Heterogeneous Data Sources Scanned', 'Context Model Updated'],
+      thought: `Processing query: "${query}" for Rajesh Hardware & Electricals (Thane West). Cross-referencing shop telemetry, stock levels, and khata records.`,
+      dataCited: ['Store: Rajesh Hardware (Thane West)', 'Owner: Rajesh Bhai', 'Status: Active'],
       timestamp: nowStr
     });
 
     reasoningSteps.push({
       agentId: 'sales',
-      agentName: 'Sales Intelligence Agent',
+      agentName: 'Sales Agent',
       phase: 'domain_analysis',
-      thought: 'Scanned commercial database. Revenue stands at ₹31,84,000 with 1,040 orders processed. Top category is Artisanal Beverages (48% share).',
-      dataCited: ['Revenue: ₹31,84,000', 'Top Category: Artisanal Beverages'],
+      thought: 'Yesterday counter sales stood at ₹48,750 with net profit of ₹11,430 (23.4% margin). Projected today forecast is ₹52,000–₹58,000.',
+      dataCited: ['Sales: ₹48,750', 'Net Profit: ₹11,430'],
       timestamp: nowStr
     });
 
     reasoningSteps.push({
       agentId: 'inventory',
-      agentName: 'Inventory Operations Agent',
+      agentName: 'Inventory Agent',
       phase: 'domain_analysis',
-      thought: 'Evaluated stock health. 2 critical SKUs identified (SKU-884, SKU-990). Dead stock working capital stands at ₹2,26,800.',
-      dataCited: ['Critical SKUs: 2', 'Dead Stock: ₹2,26,800'],
+      thought: 'Inventory health: 1-inch PVC Pipe is critical (4 bundles left, 3 days). Copper wire is low (12 rolls left, 4 days). Recommending replenishment.',
+      dataCited: ['1-inch PVC: 3 days left', 'Copper wire: 4 days left'],
       timestamp: nowStr
     });
 
     reasoningSteps.push({
-      agentId: 'orchestrator',
-      agentName: 'Decision Support Agent (COO)',
+      agentId: 'crm',
+      agentName: 'CRM & Khata Agent',
       phase: 'final_synthesis',
-      thought: 'Synthesized custom query answer grounded in active operational state.',
-      dataCited: ['Executive Insights Ready'],
+      thought: 'Uncollected customer khata stands at ₹72,500 across 3 accounts (Sharma Construction ₹32k, Sai Electric ₹21.5k, Om Enterprises ₹19k).',
+      dataCited: ['Pending Khata: ₹72,500'],
       timestamp: nowStr
     });
 
-    finalAnswer = `Here is the multi-agent analysis for your query: **"${query}"**\n\n- **Commercial Health**: August revenue is **₹31,84,000** (-23.4% vs target), with Artisanal Beverages holding the highest category market share in Mumbai.\n- **Operational Constraints**: SKU-884 (Monsooned Malabar Arabica) has only **3 days of stock remaining** (42 units).\n- **Financial Position**: Liquidity buffer is healthy at **₹11,36,000**, though Bhiwandi freight expenses ran **+₹3,12,000 over budget**.\n- **Customer Sentiment**: WhatsApp complaints stand at **28% negative**, primarily due to monsoon shipping delay inquiries.\n\n*Would you like me to issue a specific reorder PO or run an expense reduction plan?*`;
+    finalAnswer = `Here is the current business status for **Rajesh Hardware & Electricals (Thane West)**:
+
+| Business Area | Current Status | Key Action Required |
+| :--- | :--- | :--- |
+| **💰 Counter Sales & Profit** | **₹48,750 Sales** / **₹11,430 Profit** | Today's expected revenue: **₹52,000 – ₹58,000** |
+| **📦 Inventory & Stockout** | **1-inch PVC Pipe (3 days left)** | Reorder 50 bundles from **Mahesh Traders** (save ₹670) |
+| **⚡ Demand Surge** | **Copper Wire (+38% sales)** | Only 12 rolls left (reorder 150 rolls to prevent stockout) |
+| **💸 Pending Khata (Udhar)** | **₹72,500 across 3 accounts** | Sharma Construction ₹32,000 (92% recovery prob) |
+
+---
+
+### 💡 What would you like to do, Rajesh Bhai?
+- Click **"Low-stock item order kar do"** to restock PVC pipe at best supplier rate.
+- Click **"Kaunse customers ne payment nahi kiya?"** to send polite WhatsApp payment reminders with UPI links.
+- Click **"Business improve kaise kar sakte hai?"** to review 32% margin LED vs water pump space reallocation.`;
 
     keyDataPoints = [
-      { label: 'Current Revenue', value: '₹31,84,000' },
-      { label: 'Stockout Risk SKUs', value: '2 Items' },
-      { label: 'Available Cash', value: '₹11,36,000' }
+      { label: "Yesterday Sales", value: "₹48,750" },
+      { label: "Net Profit", value: "₹11,430" },
+      { label: "Pending Udhar", value: "₹72,500" },
+      { label: "Stock Alert", value: "PVC Pipe (3 Days)" }
     ];
 
     suggestedActions = [
-      { label: 'Issue Reorder PO (₹3,30,000)', actionType: 'reorder', payload: { skuId: 'SKU-884', qty: 250 } },
-      { label: 'Review Executive Recommendations', actionType: 'navigate', payload: { tab: 'executive' } }
+      { label: "Haan, low-stock item order kar do", actionType: "vyapar_supplier_modal", payload: { item: "1-inch PVC Pipe" } },
+      { label: "Kaunse customers ne payment nahi kiya?", actionType: "query", payload: { query: "Kaunse customers ne payment nahi kiya?" } },
+      { label: "Business improve kaise kar sakte hai?", actionType: "query", payload: { query: "Business improve kaise kar sakte hai?" } }
     ];
   }
 

@@ -20,8 +20,8 @@ from src.pipeline import FakeNewsDetectorSystem
 
 # Configure page settings
 st.set_page_config(
-    page_title="Citadel Veracity Shield • ML Detection",
-    page_icon="🛡️",
+    page_title="TruthLens • ML News Veracity Detector",
+    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -216,7 +216,7 @@ system = get_system()
 
 # Sidebar configuration
 with st.sidebar:
-    st.markdown("## 🛡️ **Citadel Veracity Shield**")
+    st.markdown("## 🔍 **TruthLens ML**")
     st.markdown("---")
 
     st.markdown("### ⚙️ Classifier Selection")
@@ -239,11 +239,11 @@ with st.sidebar:
         """
     )
     st.markdown("---")
-    st.caption("Citadel SaaS Factory • Autonomous Agent Engine")
+    st.caption("TruthLens Engine • Autonomous NLP Classifier")
 
 # Main Header
 st.markdown('<div class="project-eyebrow">Natural Language Processing • Machine Learning System</div>', unsafe_allow_html=True)
-st.markdown('<div class="project-title">Article Veracity & Misinformation Detector</div>', unsafe_allow_html=True)
+st.markdown('<div class="project-title">TruthLens: Article Veracity & Misinformation Detector</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="project-subtitle">Classifies news articles as genuine or fake by combining lexical semantics, '
     'subword stylometry, and linguistic claim signals.</div>',

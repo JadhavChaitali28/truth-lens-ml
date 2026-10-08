@@ -19,7 +19,7 @@ from dataset.loader import load_dataset
 from src.pipeline import FakeNewsDetectorSystem
 
 app = FastAPI(
-    title="Citadel Fake News Detection API",
+    title="TruthLens ML Veracity Detection API",
     description="ML-powered news article veracity classification using TF-IDF and stylometric features",
     version="1.0.0",
 )

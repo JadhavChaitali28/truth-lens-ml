@@ -1,4 +1,4 @@
-# Fake News Detection System
+# TruthLens — ML-Based News Veracity & Misinformation Detection System
 
 An enterprise-ready, modular Machine Learning system that classifies news articles as **potentially fake or genuine** based on their textual content and linguistic/stylometric features.
 
